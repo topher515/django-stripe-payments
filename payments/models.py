@@ -384,7 +384,7 @@ class Customer(StripeObject):
                 sub_obj.save()
         else:
             # It's just a single transaction
-            self.purchase_one(amount=int(PAYMENTS_PLANS[plan]["price"] * 100),
+            self.purchase_one(amount=PAYMENTS_PLANS[plan]["price"],
                     description=PAYMENTS_PLANS[plan]["name"],
                 )
 
@@ -396,7 +396,7 @@ class Customer(StripeObject):
 
     def purchase_one(self, amount, description=None, currency="usd", ):
         resp = stripe.Charge.create(
-            amount=amount,
+            amount=int(amount * 100),
             currency=currency,
             customer=self.stripe_id,
             description=description
