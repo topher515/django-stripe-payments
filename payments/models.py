@@ -8,12 +8,11 @@ from django.db import models
 from django.utils import timezone
 from django.template.loader import render_to_string
 
-try:
-    from django.contrib.auth import get_user_model
-    User = get_user_model()
-except ImportError:
-    from django.contrib.auth.models import User
+DJANGO_AUTH_USER = getattr(settings,'AUTH_USER_MODEL','auth.User')
 from django.contrib.sites.models import Site
+
+
+
 
 import stripe
 
@@ -262,7 +261,7 @@ class TransferChargeFee(models.Model):
 
 class Customer(StripeObject):
     
-    user = models.OneToOneField(User, null=True)
+    user = models.OneToOneField(DJANGO_AUTH_USER, null=True)
     
     plan = models.CharField(max_length=100, blank=True)
     
@@ -272,6 +271,9 @@ class Customer(StripeObject):
     
     date_purged = models.DateTimeField(null=True, editable=False)
     
+    def __unicode__(self):
+        return "%s%s (%s)" % (self.card_kind, self.card_last_4, self.plan)
+
     @property
     def stripe_customer(self):
         stripe.api_key = settings.STRIPE_SECRET_KEY
@@ -382,20 +384,30 @@ class Customer(StripeObject):
                 sub_obj.save()
         else:
             # It's just a single transaction
-            resp = stripe.Charge.create(
-                amount=PAYMENTS_PLANS[plan]["price"] * 100,
-                currency="usd",
-                customer=self.stripe_id,
-                description=PAYMENTS_PLANS[plan]["name"]
-            )
-            obj = self.record_charge(resp["id"])
-            obj.description = resp["description"]
-            obj.save()
-            obj.send_receipt()
+            self.purchase_one(amount=int(PAYMENTS_PLANS[plan]["price"] * 100),
+                    description=PAYMENTS_PLANS[plan]["name"],
+                )
+
+
         self.plan = plan
         self.save()
         purchase_made.send(sender=self, plan=plan, stripe_response=resp)
     
+
+    def purchase_one(self, amount, description=None, currency="usd", ):
+        resp = stripe.Charge.create(
+            amount=amount,
+            currency=currency,
+            customer=self.stripe_id,
+            description=description
+        )
+        obj = self.record_charge(resp["id"])
+        obj.description = resp["description"]
+        obj.save()
+        obj.send_receipt()
+        return obj
+
+
     def record_charge(self, charge_id):
         data = stripe.Charge.retrieve(charge_id)
         obj, created = self.charges.get_or_create(
