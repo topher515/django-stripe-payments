@@ -333,15 +333,16 @@ class Customer(StripeObject):
         cancelled.send(sender=self, stripe_response=sub)
     
     @classmethod
-    def create(cls, user):
+    def create(cls, user, **kwargs):
         stripe.api_key = settings.STRIPE_SECRET_KEY
         customer = stripe.Customer.create(
             email=user.email
         )
-        return Customer.objects.create(
-            user=user,
-            stripe_id=customer.id
-        )
+        kwargs.update({
+            'user':user,
+            'stripe_id':customer.id
+        })
+        return Customer.objects.create(**kwargs)
     
     def update_card(self, token):
         cu = self.stripe_customer
